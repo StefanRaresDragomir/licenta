@@ -6,9 +6,14 @@ export const useGlobalContext = () => useContext(GlobalContext);
 
 const GlobalProvider = ({children}) => {
 
+    
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [user, setUser] = useState(null)
     const [isLoading, setIsLoading] = useState(true)
+    const [currentMonth, setCurrentMonth] = useState(new Date());
+    const [userGoal, setUserGoal] = useState(null);
+
+
 
     useEffect(() => {
         getCurrentUser()
@@ -36,7 +41,13 @@ const GlobalProvider = ({children}) => {
                 setIsLoggedIn,
                 user,
                 setUser,
-                isLoading
+                isLoading,
+                currentMonth,
+                setCurrentMonth,
+                userGoal,
+                setUserGoal
+
+
            }} 
         >
         {children}
