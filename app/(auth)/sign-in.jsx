@@ -7,6 +7,11 @@ import { useState } from 'react';
 import  CustomButton from '../../components/CustomButton'
 import { Link, router } from 'expo-router';
 import { signIn } from '../../lib/appwrite';
+import { useGlobalContext } from '../../context/GlobalProvider';
+import { databases, config } from '../../lib/appwrite';
+import { Query } from 'react-native-appwrite';
+import { getCurrentUser } from '../../lib/appwrite';
+
 
 const SignIn = () => {
 
@@ -14,6 +19,9 @@ const SignIn = () => {
     email: '',
     password: ''
   }) 
+
+  const { setUser, setIsLoggedIn, setUserGoal } = useGlobalContext();
+
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -29,7 +37,28 @@ const SignIn = () => {
       try {
         await signIn(form.email, form.password)
   
-        //set it to global state...
+        const currentUser = await getCurrentUser();
+setUser(currentUser);
+setIsLoggedIn(true);
+
+
+const res = await databases.listDocuments(
+  config.databaseId,
+  config.goalsCollectionId,
+  [Query.equal('userId', currentUser.$id)]
+);
+
+if (res.total > 0) {
+  const goal = res.documents[0];
+  setUserGoal({
+    calories: goal.calories,
+    protein: goal.protein,
+    carbs: goal.carbs,
+    fat: goal.fat,
+  });
+} else {
+  setUserGoal(null);
+}
   
         router.replace('/profile')
       } catch (error) {

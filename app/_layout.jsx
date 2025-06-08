@@ -4,6 +4,8 @@ import { useFonts } from "expo-font";
 import "../global.css";
 import { useEffect } from "react";
 import GlobalProvider from '../context/GlobalProvider';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
 
 SplashScreen.preventAutoHideAsync();
 
@@ -83,6 +85,7 @@ const RootLayout = () => {
   }
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <GlobalProvider>
 
     <Stack>
@@ -94,6 +97,7 @@ const RootLayout = () => {
     </Stack>
 
     </GlobalProvider>
+    </GestureHandlerRootView>
   )
 }
   

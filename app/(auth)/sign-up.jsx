@@ -5,6 +5,12 @@ import FormField from '../../components/FormField';
 import { Link, router, useRouter } from 'expo-router';
 import { createUser } from '../../lib/appwrite';
 import CustomButton from '../../components/CustomButton';
+import { useGlobalContext } from '../../context/GlobalProvider';
+import { databases, config } from '../../lib/appwrite';
+import { Query } from 'react-native-appwrite';
+import { getCurrentUser } from '../../lib/appwrite';
+
+
 
 const SignUp = () => {
   const [form, setForm] = useState({
@@ -13,29 +19,52 @@ const SignUp = () => {
     password: ''
   });
 
+  const { setUser, setIsLoggedIn, setUserGoal } = useGlobalContext();
+
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const submit = async () => {
-    if(!form.username || !form.email || !form.password) {
-      Alert.alert('Error', 'Please fill in all the fields')
+  if (!form.username || !form.email || !form.password) {
+    Alert.alert('Error', 'Please fill in all the fields');
+    return;
+  }
+
+  setIsSubmitting(true);
+
+  try {
+    const result = await createUser(form.email, form.password, form.username);
+
+    const currentUser = await getCurrentUser();
+    setUser(currentUser);
+    setIsLoggedIn(true);
+
+   
+    const res = await databases.listDocuments(
+      config.databaseId,
+      config.goalsCollectionId,
+      [Query.equal('userId', currentUser.$id)]
+    );
+
+    if (res.total > 0) {
+      const goal = res.documents[0];
+      setUserGoal({
+        calories: goal.calories,
+        protein: goal.protein,
+        carbs: goal.carbs,
+        fat: goal.fat,
+      });
+    } else {
+      setUserGoal(null);
     }
 
-    setIsSubmitting(true);
-
-    try {
-      const result = await createUser(form.email, form.password, form.username)
-
-      //set it to global state...
-
-      router.replace('/profile')
-    } catch (error) {
-      Alert.alert('Error', error.message)
-    } finally {
-      setIsSubmitting(false)
-    }
-
-    createUser();
-  };
+    router.replace('/profile');
+  } catch (error) {
+    Alert.alert('Error', error.message);
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   return (
     <SafeAreaView className="bg-secondary h-full">

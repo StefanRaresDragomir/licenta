@@ -1,8 +1,13 @@
-import { View, Text } from 'react-native'
+import { View, Text, StatusBar as RNStatusBar } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 
 const AuthLayout = () => {
+  useEffect(() => {
+    RNStatusBar.setBarStyle('dark-content');
+  }, []);
+
   return (
     <>
       <Stack>
@@ -20,9 +25,9 @@ const AuthLayout = () => {
         />
       </Stack>
 
-      <StatusBar backgroundColor="#161622" style="dark" />
+      <StatusBar backgroundColor="#ffffff" style="dark" translucent={false} />
     </>
-  )
-}
+  );
+};
 
-export default AuthLayout
+export default AuthLayout;
