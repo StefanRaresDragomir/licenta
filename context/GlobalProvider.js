@@ -12,7 +12,7 @@ const GlobalProvider = ({children}) => {
     const [isLoading, setIsLoading] = useState(true)
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [userGoal, setUserGoal] = useState(null);
-
+    const [refreshGoals, setRefreshGoals] = useState(false);
 
 
     useEffect(() => {
@@ -45,9 +45,9 @@ const GlobalProvider = ({children}) => {
                 currentMonth,
                 setCurrentMonth,
                 userGoal,
-                setUserGoal
-
-
+                setUserGoal,
+                refreshGoals,
+                setRefreshGoals
            }} 
         >
         {children}

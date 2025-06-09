@@ -1,26 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  View, TextInput, FlatList, Text, TouchableOpacity,
-  StyleSheet, Image, Modal as RNModal
+  View,
+  TextInput,
+  FlatList,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
 } from 'react-native';
 import Modal from 'react-native-modal';
-import { Camera } from 'expo-camera';
-import { searchFoodsByBarcode, searchFoods } from '../lib/appwrite'; 
-import { useGlobalContext } from '../context/GlobalProvider';
-import icons from '../constants/icons.js';
+import { searchFoods } from '../lib/appwrite';
+import { Image } from 'react-native';
+
+
 
 const FoodSearchModal = ({ visible, onClose, onCreateFood, onSelectFood, recentFoods }) => {
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
-  const [cameraVisible, setCameraVisible] = useState(false);
-  const [hasPermission, setHasPermission] = useState(null);
+  const [barcode, setBarcode] = useState('');
+  const [showBarcodeInput, setShowBarcodeInput] = useState(false);
 
-  useEffect(() => {
-  (async () => {
-    const { status } = await Camera.requestCameraPermissionsAsync();
-    setHasPermission(status === 'granted');
-  })();
-}, []);
+
 
   const handleSearch = async (text) => {
     setSearch(text);
@@ -31,17 +30,6 @@ const FoodSearchModal = ({ visible, onClose, onCreateFood, onSelectFood, recentF
 
     const found = await searchFoods(text);
     setResults(found);
-  };
-
-  const handleBarCodeScanned = async ({ data }) => {
-    setCameraVisible(false);
-    const result = await searchFoodsByBarcode(data);
-    if (result && result.length > 0) {
-      setResults(result);
-      setSearch('');
-    } else {
-      setResults([]);
-    }
   };
 
   return (
@@ -55,17 +43,73 @@ const FoodSearchModal = ({ visible, onClose, onCreateFood, onSelectFood, recentF
       animationOut="zoomOut"
     >
       <View style={styles.container}>
-        <View style={styles.searchRow}>
-          <TextInput
-            placeholder="Search food..."
-            value={search}
-            onChangeText={handleSearch}
-            style={styles.input}
-          />
-          <TouchableOpacity onPress={() => setCameraVisible(true)} style={styles.scanIconContainer}>
-            <Image source={require('../assets/icons/barcode.png')} style={styles.scanIcon} />
-          </TouchableOpacity>
-        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+  <TextInput
+    placeholder="Search food..."
+    value={search}
+    onChangeText={handleSearch}
+    style={[styles.input, { flex: 1 }]}
+  />
+  <TouchableOpacity
+  onPress={() => setShowBarcodeInput(!showBarcodeInput)}
+  style={{ marginLeft: 8, marginTop: -12 }}
+>
+  <Image
+    source={require('../assets/icons/barcode.png')}
+    style={{ width: 28, height: 28 }}
+    resizeMode="contain"
+  />
+</TouchableOpacity>
+
+
+</View>
+
+{showBarcodeInput && (
+  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+    <TextInput
+      placeholder="Enter barcode..."
+      value={barcode}
+      onChangeText={setBarcode}
+      keyboardType="numeric"
+      style={[styles.input, { flex: 1 }]}
+    />
+    <TouchableOpacity
+      onPress={async () => {
+        if (!barcode) return;
+        try {
+          const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+          const data = await res.json();
+          if (data?.status === 1) {
+            const p = data.product;
+            const food = {
+              name: p.product_name || 'Unnamed product',
+              calories: Math.round(p.nutriments?.['energy-kcal_100g'] || 0),
+              protein: Math.round(p.nutriments?.['proteins_100g'] || 0),
+              carbs: Math.round(p.nutriments?.['carbohydrates_100g'] || 0),
+              fat: Math.round(p.nutriments?.['fat_100g'] || 0),
+              barcode: barcode
+            };
+            onSelectFood(food);
+          } else {
+            alert('Product not found. Try another barcode.');
+          }
+        } catch (e) {
+          alert('Error while fetching product.');
+          console.error(e);
+        }
+      }}
+      style={{
+        backgroundColor: '#C0C0C0',
+        padding: 10,
+        borderRadius: 8,
+        marginLeft: 8
+      }}
+    >
+      <Text style={{ color: 'white', fontWeight: '600' }}>Search</Text>
+    </TouchableOpacity>
+  </View>
+)}
+
 
         <TouchableOpacity onPress={onCreateFood} style={styles.createButton}>
           <Text style={styles.createButtonText}>Create new food</Text>
@@ -85,20 +129,6 @@ const FoodSearchModal = ({ visible, onClose, onCreateFood, onSelectFood, recentF
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
           <Text style={styles.closeButtonText}>Close</Text>
         </TouchableOpacity>
-
-        
-        <RNModal visible={cameraVisible} animationType="slide">
-          <Camera
-            onBarCodeScanned={handleBarCodeScanned}
-            style={{ flex: 1 }}
-            barCodeScannerSettings={{
-            barCodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'], 
-          }}
-          />
-          <TouchableOpacity onPress={() => setCameraVisible(false)} style={styles.closeCamera}>
-            <Text style={{ color: 'white', fontSize: 18 }}>Close Camera</Text>
-          </TouchableOpacity>
-        </RNModal>
       </View>
     </Modal>
   );
@@ -111,28 +141,12 @@ const styles = StyleSheet.create({
     padding: 16,
     height: '55%',
   },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   input: {
-    flex: 1,
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 12,
     padding: 10,
     marginBottom: 12,
-    marginRight: 8,
-  },
-  scanIconContainer: {
-    padding: 6,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 8,
-  },
-  scanIcon: {
-    width: 24,
-    height: 24,
-    resizeMode: 'contain',
   },
   createButton: {
     backgroundColor: '#C0C0C0',
@@ -162,14 +176,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
     fontSize: 16,
-  },
-  closeCamera: {
-    position: 'absolute',
-    bottom: 40,
-    alignSelf: 'center',
-    backgroundColor: '#000000aa',
-    padding: 12,
-    borderRadius: 10,
   },
 });
 
