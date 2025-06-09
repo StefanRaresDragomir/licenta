@@ -44,10 +44,11 @@ const Profile = () => {
   const [showCustomGoal, setShowCustomGoal] = useState(false);
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [caloriesPreview, setCaloriesPreview] = useState({ lose: 0, maintain: 0, gain: 0 });
+  
 
   const [showStatsModal, setShowStatsModal] = useState(false);
 
-  const { setUserGoal } = useGlobalContext();
+  const { setUserGoal, setRefreshGoals } = useGlobalContext();
 
 
 const [showAnimated, setShowAnimated] = useState(false);
@@ -253,6 +254,8 @@ const [statsForm, setStatsForm] = useState({
   const saveGoal = async (goalType, calories) => {
   try {
     let protein, fat, carbs;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     if (goalType === 'lose') {
       protein = userDoc.weight * 2.2;
@@ -275,47 +278,57 @@ const [statsForm, setStatsForm] = useState({
       protein: Math.round(protein),
       fat: Math.round(fat),
       carbs: Math.round(carbs),
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      startDate: new Date().toISOString()
     };
 
-    const response = await databases.listDocuments(
+    
+    const res = await databases.listDocuments(
       config.databaseId,
       config.goalsCollectionId,
       [Query.equal('userId', userDoc.$id)]
     );
 
-    if (response.documents.length > 0) {
-      const goalId = response.documents[0].$id;
-      await databases.updateDocument(
-        config.databaseId,
-        config.goalsCollectionId,
-        goalId,
-        roundedGoal
-      );
-    } else {
-      await databases.createDocument(
-        config.databaseId,
-        config.goalsCollectionId,
-        ID.unique(),
-        {
-          userId: userDoc.$id,
-          ...roundedGoal
-        },
-        [
-          Permission.read(Role.user(userDoc.accountId)),
-          Permission.update(Role.user(userDoc.accountId)),
-          Permission.delete(Role.user(userDoc.accountId))
-        ]
-      );
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    for (const doc of res.documents) {
+      const goalDate = new Date(doc.startDate);
+      if (goalDate >= todayStart && goalDate <= todayEnd) {
+        await databases.deleteDocument(
+          config.databaseId,
+          config.goalsCollectionId,
+          doc.$id
+        );
+      }
     }
 
     
+    await databases.createDocument(
+      config.databaseId,
+      config.goalsCollectionId,
+      ID.unique(),
+      {
+        userId: userDoc.$id,
+        ...roundedGoal
+      },
+      [
+        Permission.read(Role.user(userDoc.accountId)),
+        Permission.update(Role.user(userDoc.accountId)),
+        Permission.delete(Role.user(userDoc.accountId))
+      ]
+    );
+
     setUserGoal({
       calories,
       protein: Math.round(protein),
       fat: Math.round(fat),
-      carbs: Math.round(carbs),
+      carbs: Math.round(carbs)
     });
+
+    setRefreshGoals(prev => !prev);
 
     Alert.alert('Success', 'Goal saved successfully!');
     setShowGoalModal(false);
@@ -327,17 +340,36 @@ const [statsForm, setStatsForm] = useState({
 
 
 
+
+
 const saveCustomGoal = async ({ calories, protein, carbs, fat }) => {
   try {
-    const response = await databases.listDocuments(
+    const roundedProtein = Math.round((protein / 100) * calories / 4);
+    const roundedCarbs = Math.round((carbs / 100) * calories / 4);
+    const roundedFat = Math.round((fat / 100) * calories / 9);
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    
+    const res = await databases.listDocuments(
       config.databaseId,
       config.goalsCollectionId,
       [Query.equal('userId', userDoc.$id)]
     );
 
-    const roundedProtein = Math.round((protein / 100) * calories / 4);
-    const roundedCarbs = Math.round((carbs / 100) * calories / 4);
-    const roundedFat = Math.round((fat / 100) * calories / 9);
+    for (const doc of res.documents) {
+      const goalDate = new Date(doc.startDate);
+      if (goalDate >= todayStart && goalDate <= todayEnd) {
+        await databases.deleteDocument(
+          config.databaseId,
+          config.goalsCollectionId,
+          doc.$id
+        );
+      }
+    }
 
     const goalData = {
       goalType: 'custom',
@@ -345,40 +377,34 @@ const saveCustomGoal = async ({ calories, protein, carbs, fat }) => {
       protein: roundedProtein,
       carbs: roundedCarbs,
       fat: roundedFat,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      startDate: new Date().toISOString()
     };
 
-    if (response.documents.length > 0) {
-      await databases.updateDocument(
-        config.databaseId,
-        config.goalsCollectionId,
-        response.documents[0].$id,
-        goalData
-      );
-    } else {
-      await databases.createDocument(
-        config.databaseId,
-        config.goalsCollectionId,
-        ID.unique(),
-        {
-          userId: userDoc.$id,
-          ...goalData
-        },
-        [
-          Permission.read(Role.user(userDoc.accountId)),
-          Permission.update(Role.user(userDoc.accountId)),
-          Permission.delete(Role.user(userDoc.accountId))
-        ]
-      );
-    }
+    await databases.createDocument(
+      config.databaseId,
+      config.goalsCollectionId,
+      ID.unique(),
+      {
+        userId: userDoc.$id,
+        ...goalData
+      },
+      [
+        Permission.read(Role.user(userDoc.accountId)),
+        Permission.update(Role.user(userDoc.accountId)),
+        Permission.delete(Role.user(userDoc.accountId))
+      ]
+    );
 
-    
     setUserGoal({
       calories,
       protein: roundedProtein,
       carbs: roundedCarbs,
       fat: roundedFat
     });
+
+    setRefreshGoals(prev => !prev);
+
 
     Alert.alert('Success', 'Custom goal saved!');
     setShowCustomGoal(false);
@@ -388,7 +414,6 @@ const saveCustomGoal = async ({ calories, protein, carbs, fat }) => {
     Alert.alert('Error', 'Could not save custom goal.');
   }
 };
-
 
 
 

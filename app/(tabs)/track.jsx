@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, View } from 'react-native';
-import CalendarWithHeader from '../../components/CalendarWithHeader';
+import { StyleSheet, View, Text, TouchableOpacity, Platform, StatusBar } from 'react-native';
+import CalendarWithDays from '../../components/CalendarWithDays';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useFocusEffect } from '@react-navigation/native';
 import DailyCalorieProgress from '../../components/DailyCalorieProgress';
@@ -16,6 +16,20 @@ import AddFoodToDayModal from '../../components/AddFoodToDayModal';
 import EditFoodModal from '../../components/EditFoodModal';
 import { createFood } from '../../lib/appwrite'; 
 import { ID } from 'react-native-appwrite';
+import {
+  isToday,
+  isYesterday,
+  isTomorrow,
+  isSameDay,
+  subDays,
+  addDays,
+  format
+} from 'date-fns';
+import { ro } from 'date-fns/locale';
+
+
+
+
 
 
 
@@ -23,10 +37,17 @@ const Track = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   const [dailyLog, setDailyLog] = useState(null);
-  const { user, userGoal, setUserGoal } = useGlobalContext();
+  const { user, userGoal, setUserGoal, refreshGoals } = useGlobalContext();
+
+
+
 
 const [showFoodModal, setShowFoodModal] = useState(false);
 const [showCreateModal, setShowCreateModal] = useState(false);
+
+const [allGoals, setAllGoals] = useState([]);
+
+
 
 
 const [editModalVisible, setEditModalVisible] = useState(false);
@@ -44,11 +65,70 @@ const handleSelectFood = (food) => {
 };
 
 const handleEditFood = (index) => {
-  const food = JSON.parse(dailyLog.foods)[index];
+  const foodList = typeof dailyLog?.foods === 'string'
+    ? JSON.parse(dailyLog.foods)
+    : dailyLog?.foods || [];
+
+  const food = foodList[index];
+  if (!food) return;
+
   setSelectedFood(food);
-  setSelectedFoodIndex(index);
-  setEditModalVisible(true);
+
+  
+  setTimeout(() => {
+    setSelectedFoodIndex(index);
+    setEditModalVisible(true);
+  }, 100);
 };
+
+const getLabelForDate = (date) => {
+  const today = new Date();
+  if (isToday(date)) return 'Today';
+  if (isYesterday(date)) return 'Yesterday';
+  if (isTomorrow(date)) return 'Tomorrow';
+  if (isSameDay(date, subDays(today, 2))) return 'Alaltaieri';
+  if (isSameDay(date, addDays(today, 2))) return 'Poimaine';
+  return format(date, 'd MMMM yyyy', { locale: ro });
+};
+
+useEffect(() => {
+  if (!user) return;
+
+  const fetchAllGoals = async () => {
+    try {
+      const res = await databases.listDocuments(
+        config.databaseId,
+        config.goalsCollectionId,
+        [Query.equal('userId', user.$id)]
+      );
+
+      const sorted = res.documents.sort(
+        (a, b) => new Date(b.startDate) - new Date(a.startDate)
+      );
+
+      setAllGoals(sorted);
+    } catch (err) {
+      console.error('Failed to fetch goals:', err);
+    }
+  };
+
+  fetchAllGoals();
+}, [user, refreshGoals]);
+
+const getGoalForDate = (date) => {
+  const dateOnly = new Date(date);
+  dateOnly.setHours(23, 59, 59, 999); 
+
+  const matching = [...allGoals]
+    .filter((g) => new Date(g.startDate) <= dateOnly)
+    .sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+
+  return matching[0] || null;
+};
+
+
+const todayGoal = getGoalForDate(selectedDate);
+
 
 const saveEditedFood = async (updatedFood) => {
   if (!dailyLog || selectedFoodIndex === null) return;
@@ -342,16 +422,28 @@ useEffect(() => {
   const dateKey = date.toDateString();
   const log = monthlyLogs[dateKey];
 
-  if (!log || !userGoal?.calories) return 0;
+  const goal = getGoalForDate(date);
 
-  return log.totalCalories - userGoal.calories;
+  if (!log || !goal) return 0;
+
+  return log.totalCalories - goal.calories;
 };
 
 
 
 
   return (
+
+    
     <View style={{ flex: 1 }}>
+      <View style={{ backgroundColor: '#C0C0C0', paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 44 }}>
+  <StatusBar barStyle="light-content" backgroundColor="#C0C0C0" />
+  <View style={{ paddingVertical: 14, alignItems: 'center' }}>
+    <Text style={{ fontSize: 18, fontWeight: 'bold', color: 'white' }}>
+      {getLabelForDate(selectedDate)}
+    </Text>
+  </View>
+</View>
   {showAnimated ? (
     <Animated.View
       entering={FadeIn.duration(400)}
@@ -359,7 +451,7 @@ useEffect(() => {
       style={{ flex: 1 }}
     >
     <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
-      <CalendarWithHeader
+      <CalendarWithDays
         selectedDate={selectedDate}
         onDateChange={setSelectedDate}
         getDailyKcalDiff={getDailyKcalDiff}
@@ -369,7 +461,7 @@ useEffect(() => {
 
       <DailyCalorieProgress
   total={dailyLog?.totalCalories || 0}
-  goal={userGoal?.calories || 2000}
+  goal={todayGoal?.calories || 2000}
   protein={dailyLog?.totalProtein || 0}
   carbs={dailyLog?.totalCarbs || 0}
   fat={dailyLog?.totalFat || 0}
